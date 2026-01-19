@@ -129,3 +129,28 @@ header { background: var(--panel-bg); border-bottom: 1px solid var(--border); di
     max-width: 600px;
     /* other props remain from original CSS */
 }
+
+/* --- Color Picker --- */
+.color-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    width: 34px;
+    height: 32px;
+    box-sizing: border-box;
+}
+#color-preview {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: 1px solid rgba(0,0,0,0.1);
+    pointer-events: none; /* Let clicks pass to parent */
+}
+#color-picker {
+    position: absolute;
+    width: 0;
+    height: 0;
+    opacity: 0;
+    pointer-events: none;
+}

@@ -81,7 +81,10 @@ async function init() {
         // Restore visual state
         document.getElementById('zoom-level').innerText = Math.round(state.zoom * 100) + "%";
         setTool(state.tool); // Restore tool state
-        if (state.color) document.getElementById('color-picker').value = state.color;
+        if (state.color) {
+            document.getElementById('color-picker').value = state.color;
+            document.getElementById('color-preview').style.backgroundColor = state.color;
+        }
 
         // Restore Sidebar
         if (state.sidebarWidth) {
@@ -441,6 +444,7 @@ function hideHoverPreview() {
 
 function setColor(c) {
     state.color = c;
+    document.getElementById('color-preview').style.backgroundColor = c;
     saveState();
 }
 

@@ -45,7 +45,13 @@
         <button id="draw-toggle" class="btn" onclick="setTool('draw')">✎ Draw</button>
         <button id="text-toggle" class="btn" onclick="setTool('text')">T Text</button>
         <button id="erase-toggle" class="btn" onclick="setTool('erase')">⌫ Eraser</button>
-        <input type="color" id="color-picker" value="#ef4444" onchange="setColor(this.value)" style="height: 32px; width: 40px; border: none; padding: 0; cursor: pointer; background: none; margin-right: 5px;">
+
+        <div style="width: 1px; height: 20px; background: #e2e8f0; margin: 0 5px;"></div>
+
+        <div class="color-btn btn" onclick="document.getElementById('color-picker').click()" title="Change Color">
+            <div id="color-preview" style="background-color: #ef4444;"></div>
+            <input type="color" id="color-picker" value="#ef4444" onchange="setColor(this.value)">
+        </div>
 
         <div style="flex: 1;"></div>
         <span id="status-text" style="color: #64748b; font-size: 12px; font-style: italic;">Auto-saving...</span>
