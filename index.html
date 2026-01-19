@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro PDF Stitcher - Fixed</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    
+    <style>
+        :root {
+            --primary: #2563eb;
+            --bg: #f1f5f9;
+            --border: #cbd5e1;
+            --dark-viewer: #525659;
+            --danger: #ef4444;
+        }
+
+        body {
+            font-family: system-ui, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: var(--bg);
+            overflow: hidden;
+        }
+
+        header {
+            background: white;
+            padding: 0.5rem 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-bottom: 1px solid var(--border);
+            z-index: 10;
+        }
+
+        .top-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            height: 40px;
+        }
+
+        .tabs-container {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            flex-grow: 1;
+        }
+
+        .tab {
+            display: flex;
+            align-items: center;
+            padding: 4px 10px;
+            background: #e2e8f0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            white-space: nowrap;
+            border: 1px solid transparent;
+        }
+
+        .tab.active { background: var(--primary); color: white; }
+
+        .tab-name {
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-right: 8px;
+        }
+
+        .tab-close {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+        }
+
+        .tab-close:hover { background: rgba(0,0,0,0.1); color: var(--danger); }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 5px 0;
+            border-top: 1px solid #f1f5f9;
+        }
+
+        .workspace {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        #viewer-pane {
+            flex: 3;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            gap: 25px;
+            background: var(--dark-viewer);
+        }
+
+        .page-container {
+            position: relative;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            background: white;
+        }
+
+        .add-page-btn {
+            position: absolute;
+            top: 0;
+            right: -85px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 80px;
+            transition: background 0.2s;
+        }
+
+        .add-page-btn.selected { background: #10b981; }
+
+        #sidebar {
+            flex: 1;
+            min-width: 320px;
+            max-width: 380px;
+            background: white;
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header { padding: 15px; border-bottom: 1px solid var(--border); background: #f8fafc; }
+
+        #basket-list { flex: 1; overflow-y: auto; padding: 15px; }
+
+        .basket-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            margin-bottom: 8px;
+            border-radius: 8px;
+            font-size: 13px;
+            background: white;
+            cursor: grab;
+        }
+
+        .btn-primary { 
+            background: var(--primary); color: white; border: none; 
+            width: 100%; height: 45px; font-weight: bold; cursor: pointer;
+        }
+
+        .btn-primary:disabled { background: #cbd5e1; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="top-row">
+        <button onclick="document.getElementById('file-input').click()" style="padding: 6px 12px; cursor: pointer;"><b>+ Open PDFs</b></button>
+        <input type="file" id="file-input" multiple accept=".pdf" style="display: none;">
+        <div class="tabs-container" id="tabs-bar"></div>
+    </div>
+    
+    <div class="toolbar">
+        <button onclick="changeZoom(-0.2)">－</button>
+        <span id="zoom-percent" style="font-size: 14px; min-width: 50px; text-align: center;">120%</span>
+        <button onclick="changeZoom(0.2)">＋</button>
+        <button style="margin-left: 10px;" onclick="resetZoom()">Fit Width</button>
+    </div>
+</header>
+
+<div class="workspace">
+    <div id="viewer-pane">
+        <div style="color: #ccc; margin-top: 100px; text-align: center;">
+            <h2>PDF Workspace</h2>
+            <p>Upload files to extract and reorder pages.</p>
+        </div>
+    </div>
+
+    <div id="sidebar">
+        <div class="sidebar-header">
+            <h3 style="margin: 0;">Export Queue</h3>
+            <p style="font-size: 12px; color: #64748b; margin: 4px 0 12px 0;">Drag to reorder pages</p>
+            <button class="btn-primary" id="download-btn" disabled onclick="generateMergedPDF()">
+                Download Merged PDF (0)
+            </button>
+        </div>
+        <div id="basket-list"></div>
+    </div>
+</div>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    let pdfDocs = []; 
+    let selectedPages = []; 
+    let currentDocId = null; 
+    let currentZoom = 1.2;
+
+    const viewer = document.getElementById('viewer-pane');
+    const basketList = document.getElementById('basket-list');
+    const downloadBtn = document.getElementById('download-btn');
+
+    Sortable.create(basketList, {
+        animation: 150,
+        onEnd: function (evt) {
+            const item = selectedPages.splice(evt.oldIndex, 1)[0];
+            selectedPages.splice(evt.newIndex, 0, item);
+        }
+    });
+
+    document.getElementById('file-input').onchange = async (e) => {
+        const files = Array.from(e.target.files);
+        for (const file of files) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdfJsDoc = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+            const id = 'doc-' + Date.now() + Math.floor(Math.random() * 1000);
+            pdfDocs.push({ id, name: file.name, bytes: arrayBuffer, pdfJsDoc: pdfJsDoc });
+        }
+        renderTabs();
+        if (!currentDocId && pdfDocs.length > 0) switchTab(pdfDocs[0].id);
+    };
+
+    function renderTabs() {
+        const tabsBar = document.getElementById('tabs-bar');
+        tabsBar.innerHTML = '';
+        pdfDocs.forEach((doc) => {
+            const div = document.createElement('div');
+            div.className = `tab ${doc.id === currentDocId ? 'active' : ''}`;
+            div.onclick = () => switchTab(doc.id);
+            div.innerHTML = `<span class="tab-name">${doc.name}</span><span class="tab-close" onclick="event.stopPropagation(); closePDF('${doc.id}')">✕</span>`;
+            tabsBar.appendChild(div);
+        });
+    }
+
+    function closePDF(id) {
+        pdfDocs = pdfDocs.filter(d => d.id !== id);
+        selectedPages = selectedPages.filter(p => p.docId !== id);
+        if (currentDocId === id) currentDocId = pdfDocs.length > 0 ? pdfDocs[0].id : null;
+        renderTabs();
+        renderViewer();
+        renderBasket();
+    }
+
+    async function switchTab(id) {
+        currentDocId = id;
+        renderTabs();
+        renderViewer();
+    }
+
+    function changeZoom(delta) {
+        currentZoom = Math.max(0.4, Math.min(3.0, currentZoom + delta));
+        renderViewer();
+    }
+
+    function resetZoom() { currentZoom = 1.0; renderViewer(); }
+
+    async function renderViewer() {
+        viewer.innerHTML = '';
+        if (!currentDocId) {
+            viewer.innerHTML = '<div style="color: #ccc; margin-top: 100px;">No PDF open</div>';
+            return;
+        }
+        document.getElementById('zoom-percent').innerText = `${Math.round(currentZoom * 100)}%`;
+        const doc = pdfDocs.find(d => d.id === currentDocId);
+        
+        for (let i = 1; i <= doc.pdfJsDoc.numPages; i++) {
+            const page = await doc.pdfJsDoc.getPage(i);
+            const viewport = page.getViewport({ scale: currentZoom });
+            
+            const container = document.createElement('div');
+            container.className = 'page-container';
+            container.style.width = `${viewport.width}px`;
+            container.style.height = `${viewport.height}px`;
+            
+            const canvas = document.createElement('canvas');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            const btn = document.createElement('button');
+            // Give the button a unique ID based on doc and page number
+            btn.id = `btn-${doc.id}-${i}`;
+            btn.className = 'add-page-btn';
+            
+            const isSelected = selectedPages.some(p => p.docId === doc.id && p.pageNum === i);
+            btn.innerText = isSelected ? '✓ Added' : '+ Add';
+            if(isSelected) btn.classList.add('selected');
+            
+            btn.onclick = () => {
+                const idx = selectedPages.findIndex(p => p.docId === doc.id && p.pageNum === i);
+                if (idx > -1) {
+                    selectedPages.splice(idx, 1);
+                    btn.innerText = '+ Add';
+                    btn.classList.remove('selected');
+                } else {
+                    selectedPages.push({ docId: doc.id, pageNum: i, name: doc.name });
+                    btn.innerText = '✓ Added';
+                    btn.classList.add('selected');
+                }
+                renderBasket();
+                // NO RENDERVIEWER() CALL HERE = NO JUMPING
+            };
+
+            container.appendChild(canvas);
+            container.appendChild(btn);
+            viewer.appendChild(container);
+            
+            page.render({ canvasContext: canvas.getContext('2d'), viewport });
+        }
+    }
+
+    function renderBasket() {
+        basketList.innerHTML = '';
+        selectedPages.forEach((item, index) => {
+            const div = document.createElement('div');
+            div.className = 'basket-item';
+            div.innerHTML = `
+                <div style="color: #94a3b8;">☰</div>
+                <div>
+                    <b>Page ${item.pageNum}</b>
+                    <div style="font-size:11px;color:#666;max-width:160px;overflow:hidden;text-overflow:ellipsis;">${item.name}</div>
+                </div>
+                <button onclick="removeByBasketIndex(${index})" style="margin-left:auto;cursor:pointer;">✕</button>
+            `;
+            basketList.appendChild(div);
+        });
+        downloadBtn.disabled = selectedPages.length === 0;
+        downloadBtn.innerText = `Download Merged PDF (${selectedPages.length})`;
+    }
+
+    window.removeByBasketIndex = (index) => {
+        const item = selectedPages[index];
+        // Before removing from array, try to find the button in the viewer and reset it
+        const btnInViewer = document.getElementById(`btn-${item.docId}-${item.pageNum}`);
+        if (btnInViewer) {
+            btnInViewer.innerText = '+ Add';
+            btnInViewer.classList.remove('selected');
+        }
+        
+        selectedPages.splice(index, 1);
+        renderBasket();
+    };
+
+    async function generateMergedPDF() {
+        downloadBtn.innerText = "Merging...";
+        downloadBtn.disabled = true;
+        try {
+            const mergedPdf = await PDFLib.PDFDocument.create();
+            for (const item of selectedPages) {
+                const docData = pdfDocs.find(d => d.id === item.docId);
+                const sourceDoc = await PDFLib.PDFDocument.load(docData.bytes.slice(0));
+                const [copiedPage] = await mergedPdf.copyPages(sourceDoc, [item.pageNum - 1]);
+                mergedPdf.addPage(copiedPage);
+            }
+            const pdfBytes = await mergedPdf.save();
+            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = "stitched_document.pdf";
+            a.click();
+        } catch (e) {
+            console.error(e);
+            alert("Error: " + e.message);
+        } finally {
+            downloadBtn.innerText = `Download Merged PDF (${selectedPages.length})`;
+            downloadBtn.disabled = false;
+        }
+    }
+</script>
+</body>
+</html>
