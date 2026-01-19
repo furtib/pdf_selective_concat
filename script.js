@@ -390,12 +390,14 @@ function setTool(toolName) {
 
     document.getElementById('draw-toggle').classList.toggle('active', state.tool === 'draw');
     document.getElementById('erase-toggle').classList.toggle('active', state.tool === 'erase');
+    document.getElementById('text-toggle').classList.toggle('active', state.tool === 'text');
 
     const wrappers = document.querySelectorAll('.page-wrapper');
     wrappers.forEach(w => {
-        w.classList.remove('draw-mode', 'erase-mode');
+        w.classList.remove('draw-mode', 'erase-mode', 'text-mode');
         if (state.tool === 'draw') w.classList.add('draw-mode');
         if (state.tool === 'erase') w.classList.add('erase-mode');
+        if (state.tool === 'text') w.classList.add('text-mode');
     });
     saveState();
 }
@@ -419,6 +421,54 @@ function setupDrawingEvents(canvas, docId, pageNum, scaleFactor) {
         };
     };
 
+    const addTextAt = (x, y) => {
+        const wrapper = canvas.parentElement;
+        const input = document.createElement('textarea');
+        input.style.position = 'absolute';
+        input.style.left = x + 'px';
+        input.style.top = y + 'px';
+        input.style.zIndex = 100;
+        input.style.background = 'white';
+        input.style.border = '1px solid #3b82f6';
+        input.style.color = '#000000';
+        input.style.fontSize = '16px';
+        input.style.fontFamily = 'Arial, sans-serif';
+        input.style.minWidth = '150px';
+        input.style.minHeight = '40px';
+        input.style.padding = '4px';
+
+        wrapper.appendChild(input);
+        input.focus();
+
+        const save = () => {
+            const text = input.value.trim();
+            if (text) {
+                if (!state.drawings[key]) state.drawings[key] = [];
+                state.drawings[key].push({
+                    type: 'text',
+                    x: x / canvas.width,
+                    y: y / canvas.height,
+                    text: text,
+                    size: 16 / canvas.height
+                });
+                saveState();
+                redrawCanvas(canvas, docId, pageNum);
+            }
+            if (input.parentNode) input.parentNode.removeChild(input);
+        };
+
+        input.addEventListener('blur', save);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                input.blur();
+            }
+            if (e.key === 'Escape') {
+                if (input.parentNode) input.parentNode.removeChild(input);
+            }
+        });
+    };
+
     const start = (e) => {
         if (!state.tool) return;
         if (e.type === 'mousedown' && e.button !== 0) return; // Only left click
@@ -433,6 +483,9 @@ function setupDrawingEvents(canvas, docId, pageNum, scaleFactor) {
              ctx.moveTo(pos.x, pos.y);
         } else if (state.tool === 'erase') {
              eraseAt(pos.x, pos.y, canvas.width, canvas.height, key);
+        } else if (state.tool === 'text') {
+             addTextAt(pos.x, pos.y);
+             isDrawing = false;
         }
     };
 
@@ -473,19 +526,31 @@ function setupDrawingEvents(canvas, docId, pageNum, scaleFactor) {
     };
 
     const eraseAt = (x, y, w, h, key) => {
-         const paths = state.drawings[key];
-         if(!paths) return;
+         const items = state.drawings[key];
+         if(!items) return;
 
          const threshold = 10; // pixels
 
-         const initialLen = paths.length;
-         state.drawings[key] = paths.filter(pathData => {
-             return !pathData.points.some((p, idx, arr) => {
-                 if (idx === 0) return false;
-                 const p1 = {x: arr[idx-1].x * w, y: arr[idx-1].y * h};
-                 const p2 = {x: p.x * w, y: p.y * h};
-                 return distToSegment({x,y}, p1, p2) < threshold;
-             });
+         const initialLen = items.length;
+         state.drawings[key] = items.filter(item => {
+             if (item.type === 'text') {
+                 const tx = item.x * w;
+                 const ty = item.y * h;
+                 const fontSize = item.size * h;
+                 ctx.font = `${fontSize}px Arial`;
+                 const textWidth = ctx.measureText(item.text.split('\n')[0]).width; // simplified width check
+
+                 // Expand hit box slightly
+                 return !(x >= tx - 10 && x <= tx + textWidth + 10 &&
+                          y >= ty - 10 && y <= ty + fontSize * (item.text.split('\n').length) + 10);
+             } else {
+                 return !item.points.some((p, idx, arr) => {
+                     if (idx === 0) return false;
+                     const p1 = {x: arr[idx-1].x * w, y: arr[idx-1].y * h};
+                     const p2 = {x: p.x * w, y: p.y * h};
+                     return distToSegment({x,y}, p1, p2) < threshold;
+                 });
+             }
          });
 
          if (state.drawings[key].length !== initialLen) {
@@ -517,8 +582,8 @@ function setupDrawingEvents(canvas, docId, pageNum, scaleFactor) {
 
 function redrawCanvas(canvas, docId, pageNum) {
     const key = `${docId}-${pageNum}`;
-    const paths = state.drawings[key];
-    if (!paths) return;
+    const items = state.drawings[key];
+    if (!items) return;
 
     const ctx = canvas.getContext('2d');
     const w = canvas.width;
@@ -529,15 +594,27 @@ function redrawCanvas(canvas, docId, pageNum) {
     ctx.lineCap = 'round';
     ctx.strokeStyle = '#ef4444';
 
-    paths.forEach(pathData => {
-        const points = pathData.points;
-        if(points.length < 1) return;
-        ctx.beginPath();
-        ctx.moveTo(points[0].x * w, points[0].y * h);
-        for(let i=1; i<points.length; i++) {
-            ctx.lineTo(points[i].x * w, points[i].y * h);
+    items.forEach(item => {
+        if (item.type === 'text') {
+            const fontSize = item.size * h;
+            ctx.font = `${fontSize}px Arial`;
+            ctx.fillStyle = '#000000';
+            ctx.textBaseline = 'top';
+            const lines = item.text.split('\n');
+            lines.forEach((line, index) => {
+                ctx.fillText(line, item.x * w, item.y * h + (index * fontSize * 1.2));
+            });
+            // no restore needed for strokeStyle as we set fillStyle, but if we change unexpected context props, we should be careful.
+        } else {
+            const points = item.points || (item.length ? item : null);
+            if(!points || points.length < 1) return;
+            ctx.beginPath();
+            ctx.moveTo(points[0].x * w, points[0].y * h);
+            for(let i=1; i<points.length; i++) {
+                ctx.lineTo(points[i].x * w, points[i].y * h);
+            }
+            ctx.stroke();
         }
-        ctx.stroke();
     });
 }
 
@@ -598,14 +675,25 @@ async function exportPDF() {
                 ctx.strokeStyle = '#ef4444';
 
                 state.drawings[drawKey].forEach(pathData => {
-                        const points = pathData.points;
-                        if(points.length < 1) return;
-                        ctx.beginPath();
-                        ctx.moveTo(points[0].x * width, points[0].y * height);
-                        for(let i=1; i<points.length; i++) {
-                            ctx.lineTo(points[i].x * width, points[i].y * height);
+                        if (pathData.type === 'text') {
+                             const fontSize = pathData.size * height;
+                             ctx.font = `${fontSize}px Arial`;
+                             ctx.fillStyle = '#000000';
+                             ctx.textBaseline = 'top';
+                             const lines = pathData.text.split('\n');
+                             lines.forEach((line, index) => {
+                                 ctx.fillText(line, pathData.x * width, pathData.y * height + (index * fontSize * 1.2));
+                             });
+                        } else {
+                            const points = pathData.points;
+                            if(!points || points.length < 1) return;
+                            ctx.beginPath();
+                            ctx.moveTo(points[0].x * width, points[0].y * height);
+                            for(let i=1; i<points.length; i++) {
+                                ctx.lineTo(points[i].x * width, points[i].y * height);
+                            }
+                            ctx.stroke();
                         }
-                        ctx.stroke();
                 });
 
                 // Convert to PNG blob

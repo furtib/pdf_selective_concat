@@ -57,6 +57,7 @@ header { background: var(--panel-bg); border-bottom: 1px solid var(--border); di
 .draw-canvas { position: absolute; top: 0; left: 0; cursor: crosshair; touch-action: none; pointer-events: none; z-index: 10; }
 .page-wrapper.draw-mode .draw-canvas { pointer-events: auto; }
 .page-wrapper.erase-mode .draw-canvas { pointer-events: auto; cursor: no-drop; }
+.page-wrapper.text-mode .draw-canvas { pointer-events: auto; cursor: text; }
 
 /* Page Controls (Floating) */
 .page-meta {
