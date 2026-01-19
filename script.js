@@ -11,6 +11,7 @@ let state = {
     currentDocId: null,
     zoom: 1.0,
     tool: null, // 'draw', 'erase', null
+    color: '#ef4444',
     scrollTop: 0
 };
 
@@ -78,6 +79,7 @@ async function init() {
         // Restore visual state
         document.getElementById('zoom-level').innerText = Math.round(state.zoom * 100) + "%";
         setTool(state.tool); // Restore tool state
+        if (state.color) document.getElementById('color-picker').value = state.color;
 
         if (state.currentDocId && pdfJsDocs[state.currentDocId]) {
             await renderViewer(state.currentDocId);
@@ -384,6 +386,11 @@ function hideHoverPreview() {
 
 // --- Drawing & Annotation ---
 
+function setColor(c) {
+    state.color = c;
+    saveState();
+}
+
 function setTool(toolName) {
     if (state.tool === toolName) state.tool = null; // Toggle off
     else state.tool = toolName;
@@ -408,7 +415,7 @@ function setupDrawingEvents(canvas, docId, pageNum, scaleFactor) {
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    ctx.strokeStyle = '#ef4444'; // Red pen
+    // Color set dynamically on draw
 
     const getPos = (e) => {
         const rect = canvas.getBoundingClientRect();
@@ -428,9 +435,9 @@ function setupDrawingEvents(canvas, docId, pageNum, scaleFactor) {
         input.style.left = x + 'px';
         input.style.top = y + 'px';
         input.style.zIndex = 100;
-        input.style.background = 'white';
+        input.style.background = 'transparent';
         input.style.border = '1px solid #3b82f6';
-        input.style.color = '#000000';
+        input.style.color = state.color || '#000000';
         input.style.fontSize = '16px';
         input.style.fontFamily = 'Arial, sans-serif';
         input.style.minWidth = '150px';
@@ -449,7 +456,8 @@ function setupDrawingEvents(canvas, docId, pageNum, scaleFactor) {
                     x: x / canvas.width,
                     y: y / canvas.height,
                     text: text,
-                    size: 16 / canvas.height
+                    size: 16 / canvas.height,
+                    color: state.color || '#000000'
                 });
                 saveState();
                 redrawCanvas(canvas, docId, pageNum);
@@ -479,6 +487,7 @@ function setupDrawingEvents(canvas, docId, pageNum, scaleFactor) {
 
         if (state.tool === 'draw') {
              currentPath = [{ x: pos.x, y: pos.y }];
+             ctx.strokeStyle = state.color || '#ef4444';
              ctx.beginPath();
              ctx.moveTo(pos.x, pos.y);
         } else if (state.tool === 'erase') {
@@ -518,7 +527,7 @@ function setupDrawingEvents(canvas, docId, pageNum, scaleFactor) {
                 const h = canvas.height;
                 const normalizedPath = currentPath.map(p => ({ x: p.x/w, y: p.y/h }));
 
-                state.drawings[key].push({ points: normalizedPath });
+                state.drawings[key].push({ points: normalizedPath, color: state.color || '#ef4444' });
                 saveState();
             }
             currentPath = [];
@@ -592,13 +601,12 @@ function redrawCanvas(canvas, docId, pageNum) {
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    ctx.strokeStyle = '#ef4444';
 
     items.forEach(item => {
         if (item.type === 'text') {
             const fontSize = item.size * h;
             ctx.font = `${fontSize}px Arial`;
-            ctx.fillStyle = '#000000';
+            ctx.fillStyle = item.color || '#000000';
             ctx.textBaseline = 'top';
             const lines = item.text.split('\n');
             lines.forEach((line, index) => {
@@ -608,6 +616,7 @@ function redrawCanvas(canvas, docId, pageNum) {
         } else {
             const points = item.points || (item.length ? item : null);
             if(!points || points.length < 1) return;
+            ctx.strokeStyle = item.color || '#ef4444';
             ctx.beginPath();
             ctx.moveTo(points[0].x * w, points[0].y * h);
             for(let i=1; i<points.length; i++) {
@@ -672,13 +681,12 @@ async function exportPDF() {
                 ctx.lineWidth = 2;
                 ctx.lineJoin = 'round';
                 ctx.lineCap = 'round';
-                ctx.strokeStyle = '#ef4444';
 
                 state.drawings[drawKey].forEach(pathData => {
                         if (pathData.type === 'text') {
                              const fontSize = pathData.size * height;
                              ctx.font = `${fontSize}px Arial`;
-                             ctx.fillStyle = '#000000';
+                             ctx.fillStyle = pathData.color || '#000000';
                              ctx.textBaseline = 'top';
                              const lines = pathData.text.split('\n');
                              lines.forEach((line, index) => {
@@ -687,6 +695,7 @@ async function exportPDF() {
                         } else {
                             const points = pathData.points;
                             if(!points || points.length < 1) return;
+                            ctx.strokeStyle = pathData.color || '#ef4444';
                             ctx.beginPath();
                             ctx.moveTo(points[0].x * width, points[0].y * height);
                             for(let i=1; i<points.length; i++) {
