@@ -370,13 +370,17 @@ function removePage(index) {
 async function showHoverPreview(e, item) {
     const preview = document.getElementById('hover-preview');
     preview.style.display = 'block';
-    preview.style.left = (e.clientX + 20) + 'px';
-    preview.style.top = Math.min(e.clientY - 50, window.innerHeight - 300) + 'px'; // Prevent going offscreen
+
+    // Initial basic positioning (loading state)
+    positionPreview(e, preview);
     preview.innerHTML = '<div style="padding:10px; font-size:12px;">Loading...</div>';
 
     if(pdfJsDocs[item.docId]) {
         const page = await pdfJsDocs[item.docId].getPage(item.pageNum);
-        const viewport = page.getViewport({ scale: 0.8 }); // Increased scale
+        // Use a reasonable scale that fits most screens
+        const scale = 0.6;
+        const viewport = page.getViewport({ scale: scale });
+
         const canvas = document.createElement('canvas');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
@@ -387,7 +391,46 @@ async function showHoverPreview(e, item) {
 
         preview.innerHTML = '';
         preview.appendChild(canvas);
+
+        // Re-position now that we have exact dimensions, to ensure it fits
+        positionPreview(e, preview, viewport.width, viewport.height);
     }
+}
+
+function positionPreview(e, preview, width = 200, height = 300) {
+    const x = e.clientX;
+    const y = e.clientY;
+    const winW = window.innerWidth;
+    const winH = window.innerHeight;
+    const gap = 20;
+
+    // Horizontal Decision
+    // If we are on the right half of the screen, show to the left of cursor
+    if (x > winW / 2) {
+        preview.style.left = 'auto';
+        preview.style.right = (winW - x + gap) + 'px';
+
+        // Ensure it doesn't go off the left edge (unlikely but possible)
+        // CSS max-width/height can help too
+    } else {
+        preview.style.right = 'auto';
+        preview.style.left = (x + gap) + 'px';
+    }
+
+    // Vertical Decision
+    // Default to aligning top of preview near cursor
+    let top = y - 50;
+
+    // Check bottom overflow
+    if (top + height > winH) {
+        // Align bottom to window bottom with padding
+        top = winH - height - gap;
+        // If that pushes it off top, pin to top
+        if (top < gap) top = gap;
+    }
+
+    preview.style.top = top + 'px';
+    preview.style.bottom = 'auto';
 }
 
 function hideHoverPreview() {
