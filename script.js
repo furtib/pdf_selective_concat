@@ -126,7 +126,10 @@ async function init() {
         const tabsTrack = document.getElementById('tabs-track');
         Sortable.create(tabsTrack, {
             animation: 150,
+            ghostClass: 'sortable-ghost',
+            dragClass: 'sortable-drag',
             onEnd: (evt) => {
+                if(evt.oldIndex === evt.newIndex) return;
                 const item = state.docs.splice(evt.oldIndex, 1)[0];
                 state.docs.splice(evt.newIndex, 0, item);
                 saveState();

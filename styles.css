@@ -29,6 +29,9 @@ header { background: var(--panel-bg); border-bottom: 1px solid var(--border); di
 .close-tab { opacity: 0.6; font-size: 14px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
 .close-tab:hover { background: rgba(0,0,0,0.2); opacity: 1; }
 
+.sortable-ghost { opacity: 0.4; background: #c7d2fe; border: 1px dashed #6366f1; }
+.sortable-drag { cursor: grabbing; opacity: 1; background: white; box-shadow: 0 5px 15px rgba(0,0,0,0.2); transform: scale(1.02); z-index: 1000; transition: none !important; }
+
 .btn { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: white; cursor: pointer; font-size: 13px; font-weight: 500; transition: 0.1s; }
 .btn:hover { background: #f8fafc; border-color: #cbd5e1; }
 .btn-primary { background: var(--primary); color: white; border: none; }
